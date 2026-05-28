@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>অ্যাডমিন ড্যাশবোর্ড - BD BIG BAZZAR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+</head>
+<body class="bg-gray-50">
+
+    <!-- লগইন ওভারলে -->
+    <div id="login-overlay" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-96">
+            <h2 class="text-xl font-bold mb-4">অ্যাডমিন লগইন</h2>
+            <input type="email" id="email" placeholder="ইমেইল" class="w-full p-3 border rounded-xl mb-3">
+            <input type="password" id="password" placeholder="পাসওয়ার্ড" class="w-full p-3 border rounded-xl mb-4">
+            <button onclick="login()" class="w-full bg-blue-600 text-white py-3 rounded-xl">লগইন</button>
+        </div>
+    </div>
+
+    <!-- ন্যাভবার -->
+    <nav class="bg-white shadow-sm p-4 flex justify-between items-center px-8">
+        <h1 class="text-xl font-bold text-blue-600">BD BIG BAZZAR | অ্যাডমিন</h1>
+        <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm">লগআউট</button>
+    </nav>
+
+    <!-- মেইন কন্টেন্ট -->
+    <main class="p-6 max-w-6xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-blue-600 p-6 rounded-2xl text-white shadow-lg">
+                <p class="opacity-80">মোট অর্ডার</p>
+                <h3 id="total-orders" class="text-3xl font-bold">0</h3>
+            </div>
+            <div class="bg-green-600 p-6 rounded-2xl text-white shadow-lg">
+                <p class="opacity-80">মোট আয় (সম্পন্ন)</p>
+                <h3 id="total-revenue" class="text-3xl font-bold">৳0</h3>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+                    <tr>
+                        <th class="p-4">ক্রেতার নাম</th>
+                        <th class="p-4">স্ট্যাটাস</th>
+                        <th class="p-4">অ্যাকশন</th>
+                    </tr>
+                </thead>
+                <tbody id="order-table-body" class="divide-y divide-gray-100">
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+     // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDkGXgmvdIAoN2-RmyAKWNLhWYbxn1o6tc",
+  authDomain: "bd-big-bazzar.firebaseapp.com",
+  projectId: "bd-big-bazzar",
+  storageBucket: "bd-big-bazzar.firebasestorage.app",
+  messagingSenderId: "142465208059",
+  appId: "1:142465208059:web:59123d10a9dbf9f87e2a5e",
+  measurementId: "G-TC87H0RJ7D"
+};
+
+// Firebase Initialize করা
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+        // লগইন স্ট্যাটাস চেক
+        auth.onAuthStateChanged((user) => {
+            document.getElementById('login-overlay').style.display = user ? 'none' : 'flex';
+            if(user) loadOrders();
+        });
+
+        function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            auth.signInWithEmailAndPassword(email, password).catch(err => alert(err.message));
+        }
+
+        function logout() { auth.signOut().then(() => location.reload()); }
+
+        // ডাটা লোড ও রেন্ডারিং
+        function loadOrders() {
+            db.collection("orders").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+                const tableBody = document.getElementById('order-table-body');
+                tableBody.innerHTML = '';
+                let totalRevenue = 0;
+
+                snapshot.forEach((doc) => {
+                    const order = doc.data();
+                    if(order.status === 'completed') totalRevenue += parseFloat(order.amount || 0);
+
+                    tableBody.innerHTML += `
+                        <tr class="border-b">
+                            <td class="p-4">${order.name}</td>
+                            <td class="p-4">
+                                <select onchange="updateStatus('${doc.id}', this.value)" class="border rounded p-1">
+                                    <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>পেন্ডিং</option>
+                                    <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>সম্পন্ন</option>
+                                </select>
+                            </td>
+                            <td class="p-4">
+                                <button onclick="deleteOrder('${doc.id}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">মুছুন</button>
+                            </td>
+                        </tr>`;
+                });
+                document.getElementById('total-orders').innerText = snapshot.size;
+                document.getElementById('total-revenue').innerText = '৳' + totalRevenue.toLocaleString();
+            });
+        }
+
+        // স্ট্যাটাস আপডেট ফাংশন
+        function updateStatus(id, status) {
+            db.collection("orders").doc(id).update({ status: status });
+        }
+
+        // অর্ডার ডিলিট ফাংশন
+        function deleteOrder(id) {
+            if(confirm("মুছে ফেলতে চান?")) db.collection("orders").doc(id).delete();
+        }
+
+        // নোট: নতুন অর্ডার যোগ করার সময় এই ফিল্ডটি ব্যবহার করবেন:
+        // timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    </script>
+</body>
+</html>
